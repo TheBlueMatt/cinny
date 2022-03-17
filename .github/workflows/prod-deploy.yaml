@@ -5,31 +5,52 @@ on:
     types: [published]
 
 jobs:
-  deploy-to-netlify:
-    name: 'Deploy to Netlify'
+  create-release:
+    name: 'Create release tar'
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
         uses: actions/checkout@v3.0.0
-      - name: Build and deploy to Netlify
-        uses: jsmrcaga/action-netlify-deploy@v1.7.2
-        with:
-          install_command: "npm ci"
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-          BUILD_DIRECTORY: "dist"
-          NETLIFY_DEPLOY_MESSAGE: "Prod deploy v${{ github.ref }}"
-          NETLIFY_DEPLOY_TO_PROD: true
+      - name: Build
+        run:
+          npm ci
       - name: Get version from tag
         id: vars
         run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
       - name: Create tar.gz
         run: tar -czvf cinny-${{ steps.vars.outputs.tag }}.tar.gz dist
-      - name: Upload tagged release
-        uses: softprops/action-gh-release@v1
+      - name: Upload release build
+        uses: actions/upload-artifact@v3.0.0
         with:
-          files: |
-            cinny-${{ steps.vars.outputs.tag }}.tar.gz
+          name: cinny-${{ steps.vars.outputs.tag }}.tar.gz
+          path: cinny-${{ steps.vars.outputs.tag }}.tar.gz
+
+  deploy-to-netlify:
+    name: 'Deploy to Netlify'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version from tag
+        id: vars
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
+      - name: Get release tar
+        uses: actions/download-artifact@v3
+        with:
+          name: cinny-${{ steps.vars.outputs.tag }}.tar.gz
+          path: cinny-${{ steps.vars.outputs.tag }}.tar.gz
+      - name: Untar release
+        run: |
+          mkdir dist
+          cd dist
+          tar -xzvf ../cinny-${{ steps.vars.outputs.tag }}.tar.gz
+      - name: Deploy to Netlify
+        uses: jsmrcaga/action-netlify-deploy@v1.7.2
+        with:
+          install_command: "echo"
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          BUILD_DIRECTORY: "dist"
+          NETLIFY_DEPLOY_MESSAGE: "Prod deploy v${{ github.ref }}"
+          NETLIFY_DEPLOY_TO_PROD: true
 
   push_to_dockerhub:
     name: Push Docker image to Docker Hub
