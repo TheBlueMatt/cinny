@@ -3,6 +3,9 @@ name: 'Production deploy'
 on:
   release:
     types: [published]
+  push:
+    branches:
+       - dev
 
 jobs:
   create-release:
